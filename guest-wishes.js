@@ -8,18 +8,33 @@
  const button=(label,fn)=>{const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=fn;return b};
  let wishes=[],index=0,timer,request=null,frame,timeout,script,callback;
  const activeCards=[];
- function clearStream(){activeCards.splice(0).forEach(c=>c.remove())}
- function positionCards(){let offset=0;activeCards.forEach(c=>{c.style.bottom=offset+'px';offset+=c.offsetHeight+12})}
+ let streamFrame=null,lastFrame=0,nextArrival=0;
+ const streamSpeed=42;
+ function clearStream(){if(streamFrame!==null)cancelAnimationFrame(streamFrame);streamFrame=null;lastFrame=0;nextArrival=0;activeCards.splice(0).forEach(c=>c.el.remove())}
+ function addWish(){
+  const w=wishes[index];index=(index+1)%wishes.length;
+  const item=document.createElement('article');item.className='shared-wish-card wish-stream-item';item.setAttribute('aria-hidden','true');
+  const n=document.createElement('strong'),m=document.createElement('p');n.textContent=w.name;m.textContent=w.message;item.append(n,m);floating.append(item);
+  const height=item.offsetHeight||130;
+  activeCards.push({el:item,y:floating.clientHeight||380,height});
+  nextArrival=(height+18)/streamSpeed;
+ }
+ function animateStream(now){
+  if(document.hidden||dialog.open||!wishes.length){clearStream();return}
+  const dt=lastFrame?Math.min((now-lastFrame)/1000,.08):0;lastFrame=now;
+  nextArrival-=dt;
+  if(nextArrival<=0)addWish();
+  for(let j=activeCards.length-1;j>=0;j--){const c=activeCards[j];c.y-=streamSpeed*dt;
+   const opacity=Math.max(0,Math.min(1,((floating.clientHeight||380)-c.y)/25,(c.y+c.height)/80));
+   c.el.style.transform='translate3d(0,'+c.y.toFixed(2)+'px,0)';c.el.style.opacity=String(opacity);
+   if(c.y < -c.height){c.el.remove();activeCards.splice(j,1)}
+  }
+  streamFrame=requestAnimationFrame(animateStream);
+ }
  function show(i){
   if(!wishes.length||document.hidden||dialog.open)return;
-  index=(i+wishes.length)%wishes.length;
-  const item=document.createElement('article');item.className='shared-wish-card wish-stream-item';item.setAttribute('aria-hidden','true');
-  const n=document.createElement('strong'),m=document.createElement('p');n.textContent=wishes[index].name;m.textContent=wishes[index].message;item.append(n,m);
-  floating.hidden=false;floating.append(item);activeCards.unshift(item);
-  while(activeCards.length>3)activeCards.pop().remove();
-  positionCards();
-  setTimeout(()=>{const at=activeCards.indexOf(item);if(at>=0){activeCards.splice(at,1);item.remove();positionCards()}},8800);
-  clearTimeout(timer);timer=setTimeout(()=>show(index+1),3000);
+  if(streamFrame!==null)return;
+  index=(i+wishes.length)%wishes.length;floating.hidden=false;lastFrame=0;nextArrival=0;streamFrame=requestAnimationFrame(animateStream);
  }
  document.addEventListener('visibilitychange',()=>{clearTimeout(timer);if(document.hidden){floating.hidden=true;clearStream()}else show(index)});
  const recent=document.createElement('div');recent.className='wish-recent';
